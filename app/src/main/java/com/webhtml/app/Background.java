@@ -25,6 +25,7 @@ public class Background {
     private final Runnable screenOffRunnable = new Runnable() {
         @Override
         public void run() {
+            // 4. Ako ne diraš nakon 5 sekundi, gasi se ekran (vraća u čistu crninu)
             if (isLockScreenVisible) {
                 setScreenBlack();
             }
@@ -47,11 +48,11 @@ public class Background {
         lockScreenWebView.setVisibility(View.GONE);
         lockScreenWebView.setAlpha(0f);
 
-        // HTML se učitava SAMO JEDNOM u memoriju sa obe stanja (crno i lockscreen)
+        // HTML početno podešen da bude skriven (crn ekran) dok se ne pozove setMode(true)
         String overlayHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>" +
                 "<meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'>" +
                 "<style>" +
-                "body { margin: 0; height: 100vh; background-color: #000000; font-family: Inter, Arial, sans-serif; color: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 40px 20px; box-sizing: border-box; user-select: none; overflow: hidden; background: #000; }" +
+                "body { margin: 0; height: 100vh; background-color: #000000; font-family: Inter, Arial, sans-serif; color: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 40px 20px; box-sizing: border-box; user-select: none; overflow: hidden; }" +
                 ".content-container { opacity: 0; transition: opacity 0.3s ease-in-out; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; width: 100%; pointer-events: none; }" +
                 "body.lockscreen-active .content-container { opacity: 1; pointer-events: auto; }" +
                 ".top-section { display: flex; flex-direction: column; align-items: center; margin-top: 20px; gap: 15px; }" +
@@ -88,12 +89,13 @@ public class Background {
 
         lockScreenWebView.loadDataWithBaseURL(null, overlayHtml, "text/html", "UTF-8", null);
 
-        // Touch listener za dvoklik i Swipe-Up
+        // Touch listener za praćenje gestova (3. Dvoklik na crnom ekranu i 5. SwipeUp)
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     initialY = event.getY();
                     
+                    // 3. Dvoklik na crnom ekranu -> prikaži lockscreen ponovo
                     if (isScreenBlack && !isLockScreenVisible) {
                         long currentTime = System.currentTimeMillis();
                         if (currentTime - lastTouchTime < 300) {
@@ -106,6 +108,7 @@ public class Background {
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
+                    // 5. SwipeUp vraća u aplikaciju - bilo da je crn ekran ili lockscreen interfejs
                     if (initialY - event.getY() > 150) {
                         hideLockScreen();
                         return true;
@@ -120,12 +123,14 @@ public class Background {
                 FrameLayout.LayoutParams.MATCH_PARENT));
     }
 
+    // 1. Dvoklik iz aplikacije
     public void handleDoubleTapTrigger() {
         if (!isScreenBlack && !isLockScreenVisible) {
             setScreenBlack();
         }
     }
 
+    // 2. Zatamni ekran odmah (čista crnina bez prikaza sata)
     private void setScreenBlack() {
         isScreenBlack = true;
         isLockScreenVisible = false;
@@ -133,9 +138,9 @@ public class Background {
 
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(View.VISIBLE);
-            // Trenutno isključujemo lockscreen interfejs preko JS-a bez ponovnog učitavanja
-            lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
             lockScreenWebView.setAlpha(1.0f);
+            // Osiguravamo da su elementi lockscreen-a sakriveni
+            lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
 
             activity.getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -145,17 +150,16 @@ public class Background {
         }
     }
 
+    // 3. Prikaz lockscreen interfejsa sa satom
     private void showLockScreen() {
         isScreenBlack = false;
         isLockScreenVisible = true;
 
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(View.VISIBLE);
-            
-            // Trenutno palimo lockscreen interfejs preko JS-a uz CSS tranziciju, bez ikakvog flešovanja
-            lockScreenWebView.evaluateJavascript("window.setMode(true);", null);
-            
             lockScreenWebView.setAlpha(1.0f);
+            // Palimo vidljivost elemenata lockscreen-a preko JS-a
+            lockScreenWebView.evaluateJavascript("window.setMode(true);", null);
             
             activity.getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -163,10 +167,12 @@ public class Background {
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             );
 
+            // 4. Pokrećemo tajmer od 5 sekundi neaktivnosti
             resetScreenOffTimer();
         }
     }
 
+    // 5. & 6. Vraćanje u aplikaciju (SwipeUp ili 6. Fizičko zaključavanje via onPause u MainActivity)
     public void hideLockScreen() {
         if (lockScreenWebView != null) {
             screenOffHandler.removeCallbacks(screenOffRunnable);
@@ -191,6 +197,6 @@ public class Background {
 
     private void resetScreenOffTimer() {
         screenOffHandler.removeCallbacks(screenOffRunnable);
-        screenOffHandler.postDelayed(screenOffRunnable, 5000);
+        screenOffHandler.postDelayed(screenOffRunnable, 5000); // 5 sekundi
     }
 }
