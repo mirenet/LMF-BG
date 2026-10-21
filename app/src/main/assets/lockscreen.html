@@ -19,12 +19,8 @@
         box-sizing: border-box;
         user-select: none;
         overflow: hidden;
-        opacity: 0;
+        opacity: 0; /* Uvek startuje potpuno nevidljiv da se ne bi prikazao na tren pri učitavanju */
         transition: opacity 0.3s ease-in-out;
-    }
-
-    body.visible {
-        opacity: 1;
     }
 
     /* Gornji deo: Katanac i Sat */
@@ -116,11 +112,6 @@
         }
         setInterval(updateClock, 1000);
         updateClock();
-
-        // Fade in efekat pri učitavanju
-        window.onload = function() {
-            document.body.classList.add('visible');
-        };
 
         // Dvoklik na lockscreen-u vraća ekran nazad u crninu (pre isteka 5 sekundi)
         let lastLockTap = 0;
