@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable autoDimRunnable = new Runnable() {
         @Override
         public void run() {
-            // Ako je lockscreen bio prikazan a korisnik nije reagovao 5 sekundi, vraćamo u potpunu crninu
+            // Ako je lockscreen bio prikazan a korisnik nije reagovao 5 sekundi, vraća u potpunu crninu
             if (isLockScreenVisible) {
                 setScreenBlack();
             }
@@ -487,7 +487,7 @@ public class MainActivity extends AppCompatActivity {
 
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(android.view.View.VISIBLE);
-            // Sakrivamo sadržaj unutar lockscreen.html (postavljamo opacity na 0) a pozadina je crna
+            // Sakrivamo sadržaj unutar lockscreen.html (opacity 0) a pozadina ostaje crna
             lockScreenWebView.evaluateJavascript("document.body.style.opacity = '0';", null);
             lockScreenWebView.setAlpha(1.0f);
 
