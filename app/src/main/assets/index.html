@@ -632,6 +632,20 @@ async function loadApp(htmlContent, fileName = ""){
 
             fileInput.click();
         });
+
+        // --- DODATO: DETEKCIJA DVOKLIKA ZA LAŽNO GAŠENJE EKRANA ---
+        let lastTapTime = 0;
+        document.addEventListener('touchend', function(e) {
+            let currentTime = new Date().getTime();
+            let tapLength = currentTime - lastTapTime;
+            if (tapLength < 300 && tapLength > 0) {
+                if (window.ScreenBridge && typeof window.ScreenBridge.triggerScreenOff === 'function') {
+                    window.ScreenBridge.triggerScreenOff();
+                }
+            }
+            lastTapTime = currentTime;
+        }, { passive: true });
+
     })();
     <\/script>
     `;
