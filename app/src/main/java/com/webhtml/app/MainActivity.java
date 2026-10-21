@@ -37,6 +37,7 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity {
 
+    // --- DINAMIČKE PROMENLJIVE IZ appConfig.js ---
     private List<String> externalDomains = new ArrayList<>();
     private String startURL = "";
     private String broAgent = "";
@@ -47,18 +48,18 @@ public class MainActivity extends AppCompatActivity {
     private boolean backgroundOpt = false;
 
     private WebView webView;
-    private WebView lockScreenWebView;
+    private WebView lockScreenWebView; 
     private android.widget.FrameLayout rootLayout;
     
     private float initialY = 0;
-    private boolean isScreenBlack = false;     
-    private boolean isLockScreenVisible = false; 
+    private boolean isScreenBlack = false;     // Da li je ekran u potpunoj crnini (1. dvoklik)
+    private boolean isLockScreenVisible = false; // Da li je prikazan lockscreen.html (2. dvoklik)
 
-    private final Handler autoDimHandler = new Handler(Looper.getMainLooper());
-    private final Runnable autoDimRunnable = new Runnable() {
+    private final Handler screenOffHandler = new Handler(Looper.getMainLooper());
+    private final Runnable screenOffRunnable = new Runnable() {
         @Override
         public void run() {
-            // Ako je lockscreen bio prikazan a korisnik nije reagovao 5 sekundi, vraća u potpunu crninu
+            // Posle 5 sekundi neaktivnosti na lockscreen-u, vraćamo u totalnu crninu
             if (isLockScreenVisible) {
                 setScreenBlack();
             }
@@ -105,37 +106,23 @@ public class MainActivity extends AppCompatActivity {
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // --- LOCKSCREEN WEBVIEW PREKRIVAČ ---
+        // --- KREIRANJE LOCKSCREEN WEBVIEW-a ---
         lockScreenWebView = new WebView(this);
         lockScreenWebView.setBackgroundColor(Color.BLACK);
         lockScreenWebView.getSettings().setJavaScriptEnabled(true);
         lockScreenWebView.setVisibility(android.view.View.GONE);
         lockScreenWebView.setAlpha(0f);
-        // Učitavamo ga jednom unapred iz assets foldera
-        lockScreenWebView.loadUrl("file:///android_asset/lockscreen.html");
 
-        // Most za povratak u crninu sa lockscreen-a na dvoklik
-        lockScreenWebView.addJavascriptInterface(new Object() {
-            @JavascriptInterface
-            public void handleDoubleTap() {
-                runOnUiThread(() -> {
-                    if (isLockScreenVisible) {
-                        setScreenBlack();
-                    }
-                });
-            }
-        }, "ScreenBridge");
-
-        // Touch listener za hvatanje Swipe-up pokreta (otključavanje u svakom trenutku)
+        // Praćenje gestova (Swipe Up za otključavanje sa bilo kog ekrana - crnog ili lockscreen-a)
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case android.view.MotionEvent.ACTION_DOWN:
                     initialY = event.getY();
                     return true;
                 case android.view.MotionEvent.ACTION_MOVE:
-                    // Swipe up (prevlačenje nagore više od 150px otključava aplikaciju)
+                    // Swipe up (prevlačenje nagore više od 150 piksela vraća u aplikaciju)
                     if (initialY - event.getY() > 150) {
-                        resetToNormalState();
+                        hideLockScreen();
                         return true;
                     }
                     break;
@@ -189,7 +176,7 @@ public class MainActivity extends AppCompatActivity {
 
         webView.addJavascriptInterface(downloadHelper, "AndroidBridge");
 
-        // --- JavaScript Bridge za kontrolu ekrana iz glavne aplikacije ---
+        // --- JavaScript Bridge za kontrolu na dvoklik ---
         if (backgroundOpt) {
             webView.addJavascriptInterface(new Object() {
                 @JavascriptInterface
@@ -201,6 +188,9 @@ public class MainActivity extends AppCompatActivity {
                         } else if (isScreenBlack && !isLockScreenVisible) {
                             // 2. Dvoklik sa crnog ekrana -> PALI lockscreen.html
                             showLockScreen();
+                        } else if (isLockScreenVisible) {
+                            // 3. Dvoklik sa lockscreen-a (pre isteka 5s) -> vraća u crninu
+                            setScreenBlack();
                         }
                     });
                 }
@@ -480,15 +470,18 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // --- METODE ZA UPRAVLJANJE EKRANOM (3 KORAKA) ---
+
     private void setScreenBlack() {
         isScreenBlack = true;
         isLockScreenVisible = false;
-        autoDimHandler.removeCallbacks(autoDimRunnable);
+        screenOffHandler.removeCallbacks(screenOffRunnable);
 
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(android.view.View.VISIBLE);
-            // Sakrivamo sadržaj unutar lockscreen.html (opacity 0) a pozadina ostaje crna
-            lockScreenWebView.evaluateJavascript("document.body.style.opacity = '0';", null);
+            lockScreenWebView.setBackgroundColor(Color.BLACK);
+            // Učitavamo čist crni ekran bez lockscreen sadržaja
+            lockScreenWebView.loadData("<html><body style='background:black;margin:0;'></body></html>", "text/html", "UTF-8");
             lockScreenWebView.setAlpha(1.0f);
 
             getWindow().getDecorView().setSystemUiVisibility(
@@ -505,8 +498,10 @@ public class MainActivity extends AppCompatActivity {
 
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(android.view.View.VISIBLE);
-            // Palimo vidljivost lockscreen sadržaja (vraćamo opacity na 1)
-            lockScreenWebView.evaluateJavascript("document.body.style.opacity = '1';", null);
+            lockScreenWebView.setBackgroundColor(Color.BLACK);
+            // OVDE UČITAVAMO PRAVI lockscreen.html FAJL IZ ASSETS!
+            lockScreenWebView.loadUrl("file:///android_asset/lockscreen.html");
+            
             lockScreenWebView.setAlpha(0f);
             lockScreenWebView.setScaleX(1.05f);
             lockScreenWebView.setScaleY(1.05f);
@@ -517,19 +512,23 @@ public class MainActivity extends AppCompatActivity {
                 .scaleY(1.0f)
                 .setDuration(300)
                 .start();
+            
+            getWindow().getDecorView().setSystemUiVisibility(
+                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            );
 
-            // Pokrećemo tajmer od 5 sekundi (ako korisnik ne reaguje, vraća se u crninu)
-            autoDimHandler.removeCallbacks(autoDimRunnable);
-            autoDimHandler.postDelayed(autoDimRunnable, 5000);
+            // Pokrećemo tajmer od 5 sekundi (posle kog se vraća u crninu ako nema akcije)
+            resetScreenOffTimer();
         }
     }
 
-    private void resetToNormalState() {
-        isScreenBlack = false;
-        isLockScreenVisible = false;
-        autoDimHandler.removeCallbacks(autoDimRunnable);
-
+    private void hideLockScreen() {
         if (lockScreenWebView != null) {
+            screenOffHandler.removeCallbacks(screenOffRunnable);
+            
+            // One UI animacija otključavanja
             lockScreenWebView.animate()
                 .alpha(0f)
                 .scaleX(1.12f)
@@ -539,6 +538,8 @@ public class MainActivity extends AppCompatActivity {
                     lockScreenWebView.setVisibility(android.view.View.GONE);
                     lockScreenWebView.setScaleX(1.0f);
                     lockScreenWebView.setScaleY(1.0f);
+                    isScreenBlack = false;
+                    isLockScreenVisible = false;
                 })
                 .start();
             
@@ -548,11 +549,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void resetScreenOffTimer() {
+        screenOffHandler.removeCallbacks(screenOffRunnable);
+        screenOffHandler.postDelayed(screenOffRunnable, 5000); // 5 sekundi
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
-        // Fizičko zaključavanje telefona ili izlazak u pozadinu uvek vraća aplikaciju u normalu
-        resetToNormalState();
+        // Fizičko zaključavanje ili izlazak u pozadinu uvek vraća aplikaciju u normalu
+        hideLockScreen();
         if (webView != null) webView.onPause();
     }
 
@@ -654,7 +660,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        autoDimHandler.removeCallbacks(autoDimRunnable);
+        screenOffHandler.removeCallbacks(screenOffRunnable);
         if (webView != null) {
             if (webView.getParent() instanceof android.view.ViewGroup) {
                 ((android.view.ViewGroup) webView.getParent()).removeView(webView);
