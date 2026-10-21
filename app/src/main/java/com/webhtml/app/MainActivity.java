@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable autoDimRunnable = new Runnable() {
         @Override
         public void run() {
-            // Ako je prošlo 5 sekundi od prikazivanja lockscreen-a a korisnik nije otključao, vraćamo u potpunu crninu
+            // Ako je lockscreen prikazan a korisnik ne reaguje 5 sekundi, ekran prelazi u potpunu crninu
             if (isLockScreenVisible) {
                 setScreenBlack();
             }
@@ -105,21 +105,33 @@ public class MainActivity extends AppCompatActivity {
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // --- LOCKSCREEN / PREKRIVAČ WEBVIEW ---
+        // --- LOCKSCREEN WEBVIEW PREKRIVAČ ---
         lockScreenWebView = new WebView(this);
         lockScreenWebView.setBackgroundColor(Color.BLACK);
         lockScreenWebView.getSettings().setJavaScriptEnabled(true);
         lockScreenWebView.setVisibility(android.view.View.GONE);
         lockScreenWebView.setAlpha(0f);
 
-        // Touch listener na prekrivaču (hvata swipe-up za otključavanje u svakom trenutku)
+        // Omogućavamo da JS u lockscreen-u može da komunicira sa Androidom
+        lockScreenWebView.addJavascriptInterface(new Object() {
+            @JavascriptInterface
+            public void handleDoubleTap() {
+                runOnUiThread(() -> {
+                    if (isLockScreenVisible) {
+                        setScreenBlack();
+                    }
+                });
+            }
+        }, "ScreenBridge");
+
+        // Touch listener za hvatanje Swipe-up pokreta za otključavanje
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case android.view.MotionEvent.ACTION_DOWN:
                     initialY = event.getY();
                     return true;
                 case android.view.MotionEvent.ACTION_MOVE:
-                    // Swipe up (prevlačenje nagore više od 150px vraća aplikaciju u normalu)
+                    // Swipe up (prevlačenje nagore više od 150px vraća u normalnu aplikaciju)
                     if (initialY - event.getY() > 150) {
                         resetToNormalState();
                         return true;
@@ -175,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
 
         webView.addJavascriptInterface(downloadHelper, "AndroidBridge");
 
-        // --- JavaScript Bridge za obradu dvoklika ---
+        // --- JavaScript Bridge za obradu dvoklika u glavnoj aplikaciji ---
         if (backgroundOpt) {
             webView.addJavascriptInterface(new Object() {
                 @JavascriptInterface
@@ -185,11 +197,8 @@ public class MainActivity extends AppCompatActivity {
                             // 1. Dvoklik iz aplikacije -> gasi ekran u potpunu crninu
                             setScreenBlack();
                         } else if (isScreenBlack && !isLockScreenVisible) {
-                            // 2. Dvoklik sa crnog ekrana -> pali lockscreen.html
+                            // 2. Dvoklik sa crnog ekrana -> PALI lockscreen.html
                             showLockScreen();
-                        } else if (isLockScreenVisible) {
-                            // 3. Dvoklik dok je lockscreen prikazan -> ponovo zatamnjuje ekran
-                            setScreenBlack();
                         }
                     });
                 }
