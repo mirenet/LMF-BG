@@ -53,7 +53,8 @@ public class Background {
                 "body { margin: 0; height: 100vh; background-color: #000000; font-family: Inter, Arial, sans-serif; color: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 40px 20px; box-sizing: border-box; user-select: none; overflow: hidden; }" +
                 ".content-container { opacity: 0; transition: opacity 0.3s ease-in-out; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; width: 100%; pointer-events: none; }" +
                 "body.lockscreen-active .content-container { opacity: 1; pointer-events: auto; }" +
-                ".top-section { display: flex; flex-direction: column; align-items: center; margin-top: 20px; gap: 15px; }" +
+                // Pomerili smo top-section malo niže (margin-top: 50px) da sat bude oko 50px ispod katanca
+                ".top-section { display: flex; flex-direction: column; align-items: center; margin-top: 50px; gap: 20px; }" +
                 ".lock-icon { width: 24px; height: 24px; fill: #dadada; }" +
                 ".clock { font-size: 48px; font-weight: 300; letter-spacing: 1px; color: #f0f0f0; }" +
                 ".middle-section { display: flex; flex-direction: column; align-items: center; justify-content: center; }" +
@@ -64,7 +65,7 @@ public class Background {
                 "<div class='content-container' id='contentContainer'>" +
                 "  <div class='top-section'>" +
                 "    <svg class='lock-icon' viewBox='0 0 24 24'><path d='M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z'/></svg>" +
-                "    <div class='clock' id='clock'>12:00</div>" +
+                "    <div class='clock' id='clock'>00:00</div>" +
                 "  </div>" +
                 "  <div class='middle-section'></div>" +
                 "  <div class='bottom-section'><div class='swipe-text'>Swipe up to unlock</div></div>" +
@@ -72,9 +73,8 @@ public class Background {
                 "<script>" +
                 "function updateClock() {" +
                 "  const now = new Date();" +
-                "  let h = now.getHours();" +
-                "  let m = now.getMinutes();" +
-                "  m = m < 10 ? '0' + m : m;" +
+                "  let h = String(now.getHours()).padStart(2, '0');" + // 24h format sa vodećom nulom (npr. 01, 02...)
+                "  let m = String(now.getMinutes()).padStart(2, '0');" + // Minuti sa vodećom nulom
                 "  document.getElementById('clock').innerText = h + ':' + m;" +
                 "}" +
                 "setInterval(updateClock, 1000);" +
@@ -87,7 +87,7 @@ public class Background {
 
         lockScreenWebView.loadDataWithBaseURL(null, overlayHtml, "text/html", "UTF-8", null);
 
-        // Touch listener za upravljanje gestovima
+        // Touch listener za gestove
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -96,12 +96,10 @@ public class Background {
                     long currentTime = System.currentTimeMillis();
                     if (currentTime - lastTouchTime < 300) {
                         if (isScreenBlack && !isLockScreenVisible) {
-                            // 1. Dvoklik sa crnog ekrana -> prikaži lockscreen
                             showLockScreen();
                             lastTouchTime = 0;
                             return true;
                         } else if (isLockScreenVisible) {
-                            // 2. NOVO: Dvoklik sa lockscreen-a pre isteka 5s -> vrati u crninu
                             setScreenBlack();
                             lastTouchTime = 0;
                             return true;
@@ -111,7 +109,6 @@ public class Background {
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
-                    // SwipeUp otključavanje
                     if (initialY - event.getY() > 150) {
                         hideLockScreen();
                         return true;
@@ -177,7 +174,6 @@ public class Background {
         if (lockScreenWebView != null) {
             screenOffHandler.removeCallbacks(screenOffRunnable);
             
-            // ELEGANTNA ANIMACIJA PRI VRAĆANJU U APLIKACIJU (Fade-out + Blagi Zoom-In efekat)
             lockScreenWebView.setPivotX(lockScreenWebView.getWidth() / 2f);
             lockScreenWebView.setPivotY(lockScreenWebView.getHeight() / 2f);
 
