@@ -95,7 +95,7 @@
         <div class="clock" id="clock">12:00</div>
     </div>
 
-    <!-- Srednji deo (Ikonica - možeš staviti putanju do svoje ikonice ili launcher icon) -->
+    <!-- Srednji deo -->
     <div class="middle-section">
         <img src="icon.png" alt="App Icon" class="app-icon" id="appIcon">
     </div>
@@ -121,6 +121,18 @@
         window.onload = function() {
             document.body.classList.add('visible');
         };
+
+        // Dvoklik na lockscreen-u vraća ekran nazad u crninu (pre isteka 5 sekundi)
+        let lastLockTap = 0;
+        document.addEventListener('touchend', function(e) {
+            let currentTime = new Date().getTime();
+            if (currentTime - lastLockTap < 300 && currentTime - lastLockTap > 0) {
+                if (window.ScreenBridge && typeof window.ScreenBridge.handleDoubleTap === 'function') {
+                    window.ScreenBridge.handleDoubleTap();
+                }
+            }
+            lastLockTap = currentTime;
+        }, { passive: true });
     </script>
 </body>
 </html>
