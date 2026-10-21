@@ -25,7 +25,6 @@ public class Background {
     private final Runnable screenOffRunnable = new Runnable() {
         @Override
         public void run() {
-            // 4. Ako ne diraš nakon 5 sekundi, gasi se ekran (vraća u čistu crninu)
             if (isLockScreenVisible) {
                 setScreenBlack();
             }
@@ -48,7 +47,6 @@ public class Background {
         lockScreenWebView.setVisibility(View.GONE);
         lockScreenWebView.setAlpha(0f);
 
-        // HTML početno podešen da bude skriven (crn ekran) dok se ne pozove setMode(true)
         String overlayHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>" +
                 "<meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'>" +
                 "<style>" +
@@ -89,26 +87,31 @@ public class Background {
 
         lockScreenWebView.loadDataWithBaseURL(null, overlayHtml, "text/html", "UTF-8", null);
 
-        // Touch listener za praćenje gestova (3. Dvoklik na crnom ekranu i 5. SwipeUp)
+        // Touch listener za upravljanje gestovima
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     initialY = event.getY();
                     
-                    // 3. Dvoklik na crnom ekranu -> prikaži lockscreen ponovo
-                    if (isScreenBlack && !isLockScreenVisible) {
-                        long currentTime = System.currentTimeMillis();
-                        if (currentTime - lastTouchTime < 300) {
+                    long currentTime = System.currentTimeMillis();
+                    if (currentTime - lastTouchTime < 300) {
+                        if (isScreenBlack && !isLockScreenVisible) {
+                            // 1. Dvoklik sa crnog ekrana -> prikaži lockscreen
                             showLockScreen();
                             lastTouchTime = 0;
                             return true;
+                        } else if (isLockScreenVisible) {
+                            // 2. NOVO: Dvoklik sa lockscreen-a pre isteka 5s -> vrati u crninu
+                            setScreenBlack();
+                            lastTouchTime = 0;
+                            return true;
                         }
-                        lastTouchTime = currentTime;
                     }
+                    lastTouchTime = currentTime;
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
-                    // 5. SwipeUp vraća u aplikaciju - bilo da je crn ekran ili lockscreen interfejs
+                    // SwipeUp otključavanje
                     if (initialY - event.getY() > 150) {
                         hideLockScreen();
                         return true;
@@ -123,14 +126,12 @@ public class Background {
                 FrameLayout.LayoutParams.MATCH_PARENT));
     }
 
-    // 1. Dvoklik iz aplikacije
     public void handleDoubleTapTrigger() {
         if (!isScreenBlack && !isLockScreenVisible) {
             setScreenBlack();
         }
     }
 
-    // 2. Zatamni ekran odmah (čista crnina bez prikaza sata)
     private void setScreenBlack() {
         isScreenBlack = true;
         isLockScreenVisible = false;
@@ -139,7 +140,8 @@ public class Background {
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(View.VISIBLE);
             lockScreenWebView.setAlpha(1.0f);
-            // Osiguravamo da su elementi lockscreen-a sakriveni
+            lockScreenWebView.setScaleX(1.0f);
+            lockScreenWebView.setScaleY(1.0f);
             lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
 
             activity.getWindow().getDecorView().setSystemUiVisibility(
@@ -150,7 +152,6 @@ public class Background {
         }
     }
 
-    // 3. Prikaz lockscreen interfejsa sa satom
     private void showLockScreen() {
         isScreenBlack = false;
         isLockScreenVisible = true;
@@ -158,7 +159,8 @@ public class Background {
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(View.VISIBLE);
             lockScreenWebView.setAlpha(1.0f);
-            // Palimo vidljivost elemenata lockscreen-a preko JS-a
+            lockScreenWebView.setScaleX(1.0f);
+            lockScreenWebView.setScaleY(1.0f);
             lockScreenWebView.evaluateJavascript("window.setMode(true);", null);
             
             activity.getWindow().getDecorView().setSystemUiVisibility(
@@ -167,22 +169,28 @@ public class Background {
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             );
 
-            // 4. Pokrećemo tajmer od 5 sekundi neaktivnosti
             resetScreenOffTimer();
         }
     }
 
-    // 5. & 6. Vraćanje u aplikaciju (SwipeUp ili 6. Fizičko zaključavanje via onPause u MainActivity)
     public void hideLockScreen() {
         if (lockScreenWebView != null) {
             screenOffHandler.removeCallbacks(screenOffRunnable);
             
+            // ELEGANTNA ANIMACIJA PRI VRAĆANJU U APLIKACIJU (Fade-out + Blagi Zoom-In efekat)
+            lockScreenWebView.setPivotX(lockScreenWebView.getWidth() / 2f);
+            lockScreenWebView.setPivotY(lockScreenWebView.getHeight() / 2f);
+
             lockScreenWebView.animate()
                 .alpha(0f)
+                .scaleX(1.08f)
+                .scaleY(1.08f)
                 .setDuration(300)
                 .withEndAction(() -> {
                     lockScreenWebView.setVisibility(View.GONE);
                     lockScreenWebView.setAlpha(1.0f);
+                    lockScreenWebView.setScaleX(1.0f);
+                    lockScreenWebView.setScaleY(1.0f);
                     lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
                     isScreenBlack = false;
                     isLockScreenVisible = false;
@@ -197,6 +205,6 @@ public class Background {
 
     private void resetScreenOffTimer() {
         screenOffHandler.removeCallbacks(screenOffRunnable);
-        screenOffHandler.postDelayed(screenOffRunnable, 5000); // 5 sekundi
+        screenOffHandler.postDelayed(screenOffRunnable, 5000);
     }
 }
