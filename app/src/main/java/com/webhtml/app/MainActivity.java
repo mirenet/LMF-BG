@@ -37,7 +37,6 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity {
 
-    // --- DINAMIČKE PROMENLJIVE IZ appConfig.js ---
     private List<String> externalDomains = new ArrayList<>();
     private String startURL = "";
     private String broAgent = "";
@@ -52,14 +51,14 @@ public class MainActivity extends AppCompatActivity {
     private android.widget.FrameLayout rootLayout;
     
     private float initialY = 0;
-    private boolean isScreenBlack = false;     // Da li je ekran u potpunoj crnini (1. dvoklik)
-    private boolean isLockScreenVisible = false; // Da li je prikazan lockscreen.html (2. dvoklik)
+    private boolean isScreenBlack = false;     
+    private boolean isLockScreenVisible = false; 
 
     private final Handler screenOffHandler = new Handler(Looper.getMainLooper());
     private final Runnable screenOffRunnable = new Runnable() {
         @Override
         public void run() {
-            // Posle 5 sekundi neaktivnosti na lockscreen-u, vraćamo u totalnu crninu
+            // Posle 5 sekundi neaktivnosti na lockscreen-u, vraća u totalnu crninu
             if (isLockScreenVisible) {
                 setScreenBlack();
             }
@@ -113,14 +112,13 @@ public class MainActivity extends AppCompatActivity {
         lockScreenWebView.setVisibility(android.view.View.GONE);
         lockScreenWebView.setAlpha(0f);
 
-        // Praćenje gestova (Swipe Up za otključavanje sa bilo kog ekrana - crnog ili lockscreen-a)
+        // Praćenje gestova (Swipe Up za otključavanje sa bilo kog ekrana)
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case android.view.MotionEvent.ACTION_DOWN:
                     initialY = event.getY();
                     return true;
                 case android.view.MotionEvent.ACTION_MOVE:
-                    // Swipe up (prevlačenje nagore više od 150 piksela vraća u aplikaciju)
                     if (initialY - event.getY() > 150) {
                         hideLockScreen();
                         return true;
@@ -480,7 +478,7 @@ public class MainActivity extends AppCompatActivity {
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(android.view.View.VISIBLE);
             lockScreenWebView.setBackgroundColor(Color.BLACK);
-            // Učitavamo čist crni ekran bez lockscreen sadržaja
+            // Učitavamo čist crni ekran (prazan HTML)
             lockScreenWebView.loadData("<html><body style='background:black;margin:0;'></body></html>", "text/html", "UTF-8");
             lockScreenWebView.setAlpha(1.0f);
 
@@ -499,7 +497,8 @@ public class MainActivity extends AppCompatActivity {
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(android.view.View.VISIBLE);
             lockScreenWebView.setBackgroundColor(Color.BLACK);
-            // OVDE UČITAVAMO PRAVI lockscreen.html FAJL IZ ASSETS!
+            
+            // Učitavamo tvoj originalni lockscreen.html
             lockScreenWebView.loadUrl("file:///android_asset/lockscreen.html");
             
             lockScreenWebView.setAlpha(0f);
