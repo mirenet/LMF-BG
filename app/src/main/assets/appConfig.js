@@ -5,7 +5,8 @@ broAgent: "",
 portrait: true, 
 screenOn: false,
 allowZoom: false,
-forceDark: false
+forceDark: false,
+background: true 
 };
 
 // Fetch parameters:
