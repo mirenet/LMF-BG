@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable autoDimRunnable = new Runnable() {
         @Override
         public void run() {
-            // Ako je lockscreen prikazan a korisnik ne reaguje 5 sekundi, ekran prelazi u potpunu crninu
+            // Ako je lockscreen bio prikazan a korisnik nije reagovao 5 sekundi, vraćamo u potpunu crninu
             if (isLockScreenVisible) {
                 setScreenBlack();
             }
@@ -111,8 +111,10 @@ public class MainActivity extends AppCompatActivity {
         lockScreenWebView.getSettings().setJavaScriptEnabled(true);
         lockScreenWebView.setVisibility(android.view.View.GONE);
         lockScreenWebView.setAlpha(0f);
+        // Učitavamo ga jednom unapred iz assets foldera
+        lockScreenWebView.loadUrl("file:///android_asset/lockscreen.html");
 
-        // Omogućavamo da JS u lockscreen-u može da komunicira sa Androidom
+        // Most za povratak u crninu sa lockscreen-a na dvoklik
         lockScreenWebView.addJavascriptInterface(new Object() {
             @JavascriptInterface
             public void handleDoubleTap() {
@@ -124,14 +126,14 @@ public class MainActivity extends AppCompatActivity {
             }
         }, "ScreenBridge");
 
-        // Touch listener za hvatanje Swipe-up pokreta za otključavanje
+        // Touch listener za hvatanje Swipe-up pokreta (otključavanje u svakom trenutku)
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case android.view.MotionEvent.ACTION_DOWN:
                     initialY = event.getY();
                     return true;
                 case android.view.MotionEvent.ACTION_MOVE:
-                    // Swipe up (prevlačenje nagore više od 150px vraća u normalnu aplikaciju)
+                    // Swipe up (prevlačenje nagore više od 150px otključava aplikaciju)
                     if (initialY - event.getY() > 150) {
                         resetToNormalState();
                         return true;
@@ -187,7 +189,7 @@ public class MainActivity extends AppCompatActivity {
 
         webView.addJavascriptInterface(downloadHelper, "AndroidBridge");
 
-        // --- JavaScript Bridge za obradu dvoklika u glavnoj aplikaciji ---
+        // --- JavaScript Bridge za kontrolu ekrana iz glavne aplikacije ---
         if (backgroundOpt) {
             webView.addJavascriptInterface(new Object() {
                 @JavascriptInterface
@@ -485,8 +487,9 @@ public class MainActivity extends AppCompatActivity {
 
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(android.view.View.VISIBLE);
+            // Sakrivamo sadržaj unutar lockscreen.html (postavljamo opacity na 0) a pozadina je crna
+            lockScreenWebView.evaluateJavascript("document.body.style.opacity = '0';", null);
             lockScreenWebView.setAlpha(1.0f);
-            lockScreenWebView.loadData("<html><body style='background:black;margin:0;'></body></html>", "text/html", "UTF-8");
 
             getWindow().getDecorView().setSystemUiVisibility(
                 android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -501,7 +504,9 @@ public class MainActivity extends AppCompatActivity {
         isLockScreenVisible = true;
 
         if (lockScreenWebView != null) {
-            lockScreenWebView.loadUrl("file:///android_asset/lockscreen.html");
+            lockScreenWebView.setVisibility(android.view.View.VISIBLE);
+            // Palimo vidljivost lockscreen sadržaja (vraćamo opacity na 1)
+            lockScreenWebView.evaluateJavascript("document.body.style.opacity = '1';", null);
             lockScreenWebView.setAlpha(0f);
             lockScreenWebView.setScaleX(1.05f);
             lockScreenWebView.setScaleY(1.05f);
@@ -546,7 +551,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Fizičko zaključavanje telefona uvek vraća aplikaciju u normalno otključano stanje
+        // Fizičko zaključavanje telefona ili izlazak u pozadinu uvek vraća aplikaciju u normalu
         resetToNormalState();
         if (webView != null) webView.onPause();
     }
