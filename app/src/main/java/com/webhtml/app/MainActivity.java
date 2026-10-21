@@ -7,8 +7,6 @@ import android.content.pm.ActivityInfo;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
@@ -37,6 +35,7 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends AppCompatActivity {
 
+    // --- DINAMIČKE PROMENLJIVE IZ appConfig.js ---
     private List<String> externalDomains = new ArrayList<>();
     private String startURL = "";
     private String broAgent = "";
@@ -44,30 +43,17 @@ public class MainActivity extends AppCompatActivity {
     private boolean screenOn = false;
     private boolean allowZoom = false; 
     private boolean forceDark = false;
-    private boolean backgroundOpt = false;
+    private boolean backgroundOpt = false; // Dodato za čitanje background opcije
 
     private WebView webView;
-    private WebView lockScreenWebView; 
     private android.widget.FrameLayout rootLayout;
-    
-    private float initialY = 0;
-    private boolean isScreenBlack = false;     
-    private boolean isLockScreenVisible = false; 
+    private Background backgroundManager;
 
-    private final Handler screenOffHandler = new Handler(Looper.getMainLooper());
-    private final Runnable screenOffRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (isLockScreenVisible) {
-                setScreenBlack();
-            }
-        }
-    };
-    
     private ValueCallback<Uri[]> uploadMessage;
     private final static int FILE_CHOOSER_RESULT_CODE = 1;
     private DownloadHelper downloadHelper;
 
+    // Kodovi i promenljive za sistemske dozvole u hodu
     private final static int LOCATION_PERMISSION_REQUEST_CODE = 100;
     private final static int MEDIA_PERMISSION_REQUEST_CODE = 101;
     
@@ -78,8 +64,10 @@ public class MainActivity extends AppCompatActivity {
     @SuppressLint({"SetJavaScriptEnabled", "QueryPermissionsNeeded"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // 1. PRVO UČITAVAMO KONFIGURACIJU IZ ASSETS/appConfig.js
         loadConfigFromAssets();
 
+        // Primena tamnog režima u zavisnosti od konfiguracije
         if (forceDark) {
             androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
                 androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
@@ -88,10 +76,12 @@ public class MainActivity extends AppCompatActivity {
 
         super.onCreate(savedInstanceState);
 
+        // 2. Primena portrait podešavanja
         if (portrait) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         }
 
+        // 3. Primena screenOn podešavanja
         if (screenOn) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
@@ -99,42 +89,18 @@ public class MainActivity extends AppCompatActivity {
         webView = new WebView(this);
         webView.setBackgroundColor(Color.parseColor("#070707"));
         
+        // Kreiramo root FrameLayout da podrži Background prekrivač
         rootLayout = new android.widget.FrameLayout(this);
         rootLayout.addView(webView, new android.widget.FrameLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // --- INICIJALIZACIJA LOCKSCREEN WEBVIEW-a UNAPRED ---
-        lockScreenWebView = new WebView(this);
-        lockScreenWebView.setBackgroundColor(Color.BLACK);
-        lockScreenWebView.getSettings().setJavaScriptEnabled(true);
-        lockScreenWebView.setVisibility(android.view.View.GONE);
-        lockScreenWebView.setAlpha(0f);
-        // Odmah ga učitavamo da bude spreman u memoriji
-        lockScreenWebView.loadUrl("file:///android_asset/lockscreen.html");
-
-        // Touch listener za Swipe Up otključavanje
-        lockScreenWebView.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
-                case android.view.MotionEvent.ACTION_DOWN:
-                    initialY = event.getY();
-                    return true;
-                case android.view.MotionEvent.ACTION_MOVE:
-                    if (initialY - event.getY() > 150) {
-                        hideLockScreen();
-                        return true;
-                    }
-                    break;
-            }
-            return false;
-        });
-
-        rootLayout.addView(lockScreenWebView, new android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT, 
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
-
         setContentView(rootLayout);
 
+        // Inicijalizujemo našu Background klasu
+        backgroundManager = new Background(this, rootLayout);
+
+        // Inicijalizujemo DownloadHelper
         downloadHelper = new DownloadHelper(this);
 
         WebSettings webSettings = webView.getSettings();
@@ -150,16 +116,19 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setSupportMultipleWindows(false);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
 
+        // 4. Primena allowZoom podešavanja (Standardni zoom sa dva prsta)
         webSettings.setSupportZoom(allowZoom);
         webSettings.setBuiltInZoomControls(allowZoom);
         webSettings.setDisplayZoomControls(false);
         webSettings.setLoadWithOverviewMode(true);
         webSettings.setUseWideViewPort(true);
 
+        // 5. Primena broAgent podešavanja (ako nije prazan)
         if (broAgent != null && !broAgent.trim().isEmpty()) {
             webSettings.setUserAgentString(broAgent);
         }
 
+        // 6. Najsavremeniji metod za automatsko tamno prebacivanje (Algorithmic Darkening)
         if (forceDark) {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
                 WebSettingsCompat.setAlgorithmicDarkeningAllowed(webSettings, true);
@@ -170,32 +139,24 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        // Omogućavanje kolačića i kolačića treće strane
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
+        // Registrujemo DownloadHelper kao JavaScript Bridge
         webView.addJavascriptInterface(downloadHelper, "AndroidBridge");
 
-        // --- Kontrola na dvoklik ---
+        // Registrujemo ScreenBridge za dvoklik ako je background omogućen u konfiguraciji
         if (backgroundOpt) {
             webView.addJavascriptInterface(new Object() {
                 @JavascriptInterface
                 public void handleDoubleTap() {
-                    runOnUiThread(() -> {
-                        if (!isScreenBlack && !isLockScreenVisible) {
-                            // 1. Dvoklik iz aplikacije -> gasi ekran u potpunu crninu
-                            setScreenBlack();
-                        } else if (isScreenBlack && !isLockScreenVisible) {
-                            // 2. Dvoklik sa crnog ekrana -> PALI lockscreen
-                            showLockScreen();
-                        } else if (isLockScreenVisible) {
-                            // 3. Dvoklik sa lockscreen-a -> vraća u crninu
-                            setScreenBlack();
-                        }
-                    });
+                    runOnUiThread(() -> backgroundManager.handleDoubleTapTrigger());
                 }
             }, "ScreenBridge");
         }
 
+        // Moderno upravljanje dugmetom nazad (OnBackPressedDispatcher)
         getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
@@ -245,7 +206,8 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return handleUrlLoading(view, request.getUrl().toString());
+                String url = request.getUrl().toString();
+                return handleUrlLoading(view, url);
             }
 
             @Override
@@ -254,6 +216,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             private boolean handleUrlLoading(WebView view, String url) {
+                // Provera da li je link eksterni na osnovu external liste iz appConfig.js
                 if (isExternalDomain(url)) {
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -263,9 +226,11 @@ public class MainActivity extends AppCompatActivity {
                         return true;
                     }
                 }
+
                 if (url.startsWith("file://") || url.startsWith("http://") || url.startsWith("https://")) {
                     return false; 
                 }
+                
                 if (url.startsWith("intent://")) {
                     try {
                         Intent intent = Intent.parseUri(url, Intent.URI_INTENT_SCHEME);
@@ -285,6 +250,7 @@ public class MainActivity extends AppCompatActivity {
                     } catch (Exception e) {}
                     return true;
                 }
+
                 try {
                     Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                     view.getContext().startActivity(intent);
@@ -295,16 +261,20 @@ public class MainActivity extends AppCompatActivity {
             }
 
             private boolean isExternalDomain(String url) {
-                if (externalDomains == null || externalDomains.isEmpty()) return false;
+                if (externalDomains == null || externalDomains.isEmpty()) {
+                    return false;
+                }
                 try {
                     Uri uri = Uri.parse(url);
                     String host = uri.getHost();
                     if (host == null) return false;
+
                     for (String domainEntry : externalDomains) {
                         String cleanDomain = domainEntry.trim().toLowerCase();
                         if (cleanDomain.startsWith("https://")) cleanDomain = cleanDomain.substring(8);
                         if (cleanDomain.startsWith("http://")) cleanDomain = cleanDomain.substring(7);
                         if (cleanDomain.endsWith("/")) cleanDomain = cleanDomain.substring(0, cleanDomain.length() - 1);
+
                         if (host.equalsIgnoreCase(cleanDomain) || host.toLowerCase().endsWith("." + cleanDomain)) {
                             return true;
                         }
@@ -327,10 +297,13 @@ public class MainActivity extends AppCompatActivity {
                 if (!urlStr.contains("#")) {
                     return super.shouldInterceptRequest(view, request);
                 }
+
                 try {
                     String[] mainParts = urlStr.split("#", 2);
                     String cleanUrlStr = mainParts[0];
                     String fragment = mainParts[1];
+
+                    // Pronalaženje "ua" parametra iz fragmenta
                     String customUa = "";
                     if (fragment.contains("ua=")) {
                         try {
@@ -340,12 +313,15 @@ public class MainActivity extends AppCompatActivity {
                             }
                         } catch (Exception ignored) {}
                     }
+
+                    // Određivanje finalnog User-Agent-a
                     String finalUa;
                     if (!customUa.isEmpty() && customUa.length() < 300) {
                         finalUa = customUa;
                     } else {
                         finalUa = (!broAgent.isEmpty()) ? broAgent : webView.getSettings().getUserAgentString();
                     }
+
                     String lowerUa = finalUa.toLowerCase();
                     boolean isHtmlMode = lowerUa.contains("mozilla");
 
@@ -353,6 +329,7 @@ public class MainActivity extends AppCompatActivity {
                     HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                     connection.setRequestMethod("GET");
                     connection.setRequestProperty("User-Agent", finalUa);
+                    
                     if (isHtmlMode) {
                         connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
                         connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
@@ -364,6 +341,7 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         connection.setRequestProperty("Accept", "application/json, application/ld+json, text/plain, */*");
                     }
+                    
                     connection.setConnectTimeout(10000);
                     connection.setReadTimeout(10000);
 
@@ -372,14 +350,18 @@ public class MainActivity extends AppCompatActivity {
                     if (mimeType == null) {
                         mimeType = isHtmlMode ? "text/html; charset=UTF-8" : "application/json; charset=UTF-8";
                     }
+                    
                     String encoding = "UTF-8";
                     if (mimeType.contains("charset=")) {
                         try {
                             encoding = mimeType.split("charset=")[1].split(";")[0].trim();
                         } catch (Exception ignored) {}
                     }
+
                     return new WebResourceResponse(mimeType.split(";")[0].trim(), encoding, inputStream);
+
                 } catch (Exception e) {}
+                
                 return super.shouldInterceptRequest(view, request);
             }
         });
@@ -410,10 +392,12 @@ public class MainActivity extends AppCompatActivity {
                 String[] requestedResources = request.getResources();
                 boolean needsCamera = false;
                 boolean needsAudio = false;
+
                 for (String resource : requestedResources) {
                     if (resource.equals(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) needsCamera = true;
                     if (resource.equals(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) needsAudio = true;
                 }
+
                 java.util.ArrayList<String> permissionsToRequest = new java.util.ArrayList<>();
                 if (needsCamera && androidx.core.content.ContextCompat.checkSelfPermission(MainActivity.this, 
                         android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -423,6 +407,7 @@ public class MainActivity extends AppCompatActivity {
                         android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                     permissionsToRequest.add(android.Manifest.permission.RECORD_AUDIO);
                 }
+
                 if (!permissionsToRequest.isEmpty()) {
                     pendingPermissionRequest = request;
                     androidx.core.app.ActivityCompat.requestPermissions(MainActivity.this,
@@ -439,20 +424,25 @@ public class MainActivity extends AppCompatActivity {
                     uploadMessage.onReceiveValue(null);
                     uploadMessage = null;
                 }
+
                 uploadMessage = filePathCallback;
                 Intent intent = fileChooserParams.createIntent();
+
                 try {
                     startActivityForResult(intent, FILE_CHOOSER_RESULT_CODE);
                 } catch (Exception e) {
                     uploadMessage = null;
                     return false;
                 }
+
                 return true;
             }
         });
 
+        // 7. Pokretanje na osnovu startURL parametra iz appConfig.js ili intenta
         Intent intent = getIntent();
         Uri data = intent != null ? intent.getData() : null;
+
         if (data != null) {
             String targetUrl = data.getQueryParameter("url");
             if (targetUrl != null && !targetUrl.isEmpty()) {
@@ -469,99 +459,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // --- METODE ZA UPRAVLJANJE EKRANOM ---
-
-    private void setScreenBlack() {
-        isScreenBlack = true;
-        isLockScreenVisible = false;
-        screenOffHandler.removeCallbacks(screenOffRunnable);
-
-        if (lockScreenWebView != null) {
-            lockScreenWebView.setVisibility(android.view.View.VISIBLE);
-            // Sakrivamo HTML element dodavanjem/skidanjem klase visible
-            lockScreenWebView.evaluateJavascript("document.body.classList.remove('visible');", null);
-            lockScreenWebView.setAlpha(1.0f);
-
-            getWindow().getDecorView().setSystemUiVisibility(
-                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                | android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-            );
-        }
-    }
-
-    private void showLockScreen() {
-        isScreenBlack = false;
-        isLockScreenVisible = true;
-
-        if (lockScreenWebView != null) {
-            lockScreenWebView.setVisibility(android.view.View.VISIBLE);
-            // Palimo vidljivost lockscreen-a preko klase u HTML-u
-            lockScreenWebView.evaluateJavascript("document.body.classList.add('visible');", null);
-            
-            lockScreenWebView.setAlpha(0f);
-            lockScreenWebView.setScaleX(1.05f);
-            lockScreenWebView.setScaleY(1.05f);
-            
-            lockScreenWebView.animate()
-                .alpha(1.0f)
-                .scaleX(1.0f)
-                .scaleY(1.0f)
-                .setDuration(300)
-                .start();
-            
-            getWindow().getDecorView().setSystemUiVisibility(
-                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                | android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-            );
-
-            resetScreenOffTimer();
-        }
-    }
-
-    private void hideLockScreen() {
-        if (lockScreenWebView != null) {
-            screenOffHandler.removeCallbacks(screenOffRunnable);
-            
-            lockScreenWebView.animate()
-                .alpha(0f)
-                .scaleX(1.12f)
-                .scaleY(1.12f)
-                .setDuration(350)
-                .withEndAction(() -> {
-                    lockScreenWebView.setVisibility(android.view.View.GONE);
-                    lockScreenWebView.evaluateJavascript("document.body.classList.remove('visible');", null);
-                    lockScreenWebView.setScaleX(1.0f);
-                    lockScreenWebView.setScaleY(1.0f);
-                    isScreenBlack = false;
-                    isLockScreenVisible = false;
-                })
-                .start();
-            
-            getWindow().getDecorView().setSystemUiVisibility(
-                android.view.View.SYSTEM_UI_FLAG_VISIBLE
-            );
-        }
-    }
-
-    private void resetScreenOffTimer() {
-        screenOffHandler.removeCallbacks(screenOffRunnable);
-        screenOffHandler.postDelayed(screenOffRunnable, 5000);
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        hideLockScreen();
-        if (webView != null) webView.onPause();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (webView != null) webView.onResume();
-    }
+    // --- METODE ZA ČITANJE I PARSIRANJE appConfig.js FAJLA ---
 
     private void loadConfigFromAssets() {
         try {
@@ -572,15 +470,19 @@ public class MainActivity extends AppCompatActivity {
             inputStream.close();
             String jsContent = new String(buffer, "UTF-8");
 
+            // Parsiramo vrednosti preko Regularnih Izraza (Regex)
             portrait = parseBoolean(jsContent, "portrait", true);
             screenOn = parseBoolean(jsContent, "screenOn", false);
             allowZoom = parseBoolean(jsContent, "allowZoom", false); 
             forceDark = parseBoolean(jsContent, "forceDark", false);
-            backgroundOpt = parseBoolean(jsContent, "background", false);
+            backgroundOpt = parseBoolean(jsContent, "background", false); // Čitamo background iz config-a
             startURL = parseString(jsContent, "startURL", "");
             broAgent = parseString(jsContent, "broAgent", "");
             externalDomains = parseArray(jsContent, "external");
-        } catch (Exception e) {}
+
+        } catch (Exception e) {
+            // Ako fajl fali ili dođe do greške, ostaće podrazumevane vrednosti
+        }
     }
 
     private boolean parseBoolean(String content, String key, boolean defaultValue) {
@@ -625,8 +527,25 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        // Fizičko zaključavanje ili izlazak u pozadinu vraća aplikaciju u normalu
+        if (backgroundManager != null) {
+            backgroundManager.hideLockScreen();
+        }
+        if (webView != null) webView.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) webView.onResume();
+    }
+
+    @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (pendingGeolocationCallback != null && pendingGeolocationOrigin != null) {
                 boolean granted = grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED;
@@ -654,8 +573,24 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        super.onActivityResult(requestCode, resultCode, intent);
+        if (requestCode == FILE_CHOOSER_RESULT_CODE) {
+            if (uploadMessage == null) return;
+            Uri[] results = null;
+            if (resultCode == Activity.RESULT_OK && intent != null) {
+                String dataString = intent.getDataString();
+                if (dataString != null) {
+                    results = new Uri[]{Uri.parse(dataString)};
+                }
+            }
+            uploadMessage.onReceiveValue(results);
+            uploadMessage = null;
+        }
+    }
+
+    @Override
     protected void onDestroy() {
-        screenOffHandler.removeCallbacks(screenOffRunnable);
         if (webView != null) {
             if (webView.getParent() instanceof android.view.ViewGroup) {
                 ((android.view.ViewGroup) webView.getParent()).removeView(webView);
