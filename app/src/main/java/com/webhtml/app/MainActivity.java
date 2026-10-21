@@ -51,8 +51,19 @@ public class MainActivity extends AppCompatActivity {
     private android.widget.FrameLayout rootLayout;
     
     private float initialY = 0;
-    private boolean isScreenBlack = false;     // Da li je ekran u potpunoj crnini (1. dvoklik)
-    private boolean isLockScreenVisible = false; // Da li je prikazan lockscreen.html (2. dvoklik)
+    private boolean isScreenBlack = false;     
+    private boolean isLockScreenVisible = false; 
+
+    private final Handler autoDimHandler = new Handler(Looper.getMainLooper());
+    private final Runnable autoDimRunnable = new Runnable() {
+        @Override
+        public void run() {
+            // Ako je prošlo 5 sekundi od prikazivanja lockscreen-a a korisnik nije otključao, vraćamo u potpunu crninu
+            if (isLockScreenVisible) {
+                setScreenBlack();
+            }
+        }
+    };
     
     private ValueCallback<Uri[]> uploadMessage;
     private final static int FILE_CHOOSER_RESULT_CODE = 1;
@@ -94,22 +105,21 @@ public class MainActivity extends AppCompatActivity {
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // --- LOCKSCREEN WEBVIEW PREKRIVAČ ---
+        // --- LOCKSCREEN / PREKRIVAČ WEBVIEW ---
         lockScreenWebView = new WebView(this);
         lockScreenWebView.setBackgroundColor(Color.BLACK);
         lockScreenWebView.getSettings().setJavaScriptEnabled(true);
         lockScreenWebView.setVisibility(android.view.View.GONE);
         lockScreenWebView.setAlpha(0f);
-        lockScreenWebView.loadUrl("file:///android_asset/lockscreen.html");
 
-        // Touch listener za prekrivač (crn ekran ili lockscreen)
+        // Touch listener na prekrivaču (hvata swipe-up za otključavanje u svakom trenutku)
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case android.view.MotionEvent.ACTION_DOWN:
                     initialY = event.getY();
                     return true;
                 case android.view.MotionEvent.ACTION_MOVE:
-                    // Swipe up (prevlačenje nagore više od 150px otključava i vraća sve u normalu)
+                    // Swipe up (prevlačenje nagore više od 150px vraća aplikaciju u normalu)
                     if (initialY - event.getY() > 150) {
                         resetToNormalState();
                         return true;
@@ -165,18 +175,21 @@ public class MainActivity extends AppCompatActivity {
 
         webView.addJavascriptInterface(downloadHelper, "AndroidBridge");
 
-        // --- JavaScript Bridge za kontrolu ekrana na dvoklik ---
+        // --- JavaScript Bridge za obradu dvoklika ---
         if (backgroundOpt) {
             webView.addJavascriptInterface(new Object() {
                 @JavascriptInterface
                 public void handleDoubleTap() {
                     runOnUiThread(() -> {
                         if (!isScreenBlack && !isLockScreenVisible) {
-                            // 1. DVOKLIK: Potpuno gasi ekran u crninu
+                            // 1. Dvoklik iz aplikacije -> gasi ekran u potpunu crninu
                             setScreenBlack();
                         } else if (isScreenBlack && !isLockScreenVisible) {
-                            // 2. DVOKLIK: Prikazuje lockscreen.html
+                            // 2. Dvoklik sa crnog ekrana -> pali lockscreen.html
                             showLockScreen();
+                        } else if (isLockScreenVisible) {
+                            // 3. Dvoklik dok je lockscreen prikazan -> ponovo zatamnjuje ekran
+                            setScreenBlack();
                         }
                     });
                 }
@@ -456,19 +469,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // --- NOVE METODE ZA UPRAVLJANJE EKRANOM ---
-
     private void setScreenBlack() {
         isScreenBlack = true;
         isLockScreenVisible = false;
+        autoDimHandler.removeCallbacks(autoDimRunnable);
 
         if (lockScreenWebView != null) {
             lockScreenWebView.setVisibility(android.view.View.VISIBLE);
             lockScreenWebView.setAlpha(1.0f);
-            // Učitavamo prazan/crni HTML ili samo bojimo u crno da nema sadržaja
             lockScreenWebView.loadData("<html><body style='background:black;margin:0;'></body></html>", "text/html", "UTF-8");
 
-            // Skrivamo status i navigation bar
             getWindow().getDecorView().setSystemUiVisibility(
                 android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 | android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -482,7 +492,6 @@ public class MainActivity extends AppCompatActivity {
         isLockScreenVisible = true;
 
         if (lockScreenWebView != null) {
-            // Ponovo učitavamo pravi lockscreen.html sa animacijom
             lockScreenWebView.loadUrl("file:///android_asset/lockscreen.html");
             lockScreenWebView.setAlpha(0f);
             lockScreenWebView.setScaleX(1.05f);
@@ -494,12 +503,17 @@ public class MainActivity extends AppCompatActivity {
                 .scaleY(1.0f)
                 .setDuration(300)
                 .start();
+
+            // Pokrećemo tajmer od 5 sekundi (ako korisnik ne reaguje, vraća se u crninu)
+            autoDimHandler.removeCallbacks(autoDimRunnable);
+            autoDimHandler.postDelayed(autoDimRunnable, 5000);
         }
     }
 
     private void resetToNormalState() {
         isScreenBlack = false;
         isLockScreenVisible = false;
+        autoDimHandler.removeCallbacks(autoDimRunnable);
 
         if (lockScreenWebView != null) {
             lockScreenWebView.animate()
@@ -514,7 +528,6 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .start();
             
-            // Vraćamo status i navigation bar na glavni ekran aplikacije
             getWindow().getDecorView().setSystemUiVisibility(
                 android.view.View.SYSTEM_UI_FLAG_VISIBLE
             );
@@ -524,8 +537,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // KLJUČNO: Ako korisnik pritisne fizičko dugme za zaključavanje (pa pauzira aplikaciju),
-        // automatski poništavamo lažni tamni režim da se aplikacija vrati u normalu!
+        // Fizičko zaključavanje telefona uvek vraća aplikaciju u normalno otključano stanje
         resetToNormalState();
         if (webView != null) webView.onPause();
     }
@@ -628,6 +640,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        autoDimHandler.removeCallbacks(autoDimRunnable);
         if (webView != null) {
             if (webView.getParent() instanceof android.view.ViewGroup) {
                 ((android.view.ViewGroup) webView.getParent()).removeView(webView);
