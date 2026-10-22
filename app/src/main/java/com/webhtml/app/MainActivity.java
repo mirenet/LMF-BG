@@ -68,10 +68,14 @@ public class MainActivity extends AppCompatActivity {
         loadConfigFromAssets();
 
         // Primena tamnog režima u zavisnosti od konfiguracije
+        // 6. Najsavremeniji metod za automatsko tamno prebacivanje (Algorithmic Darkening)
         if (forceDark) {
-            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
-                androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
-            );
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(webSettings, true);
+            } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                @SuppressWarnings("deprecation")
+                WebSettingsCompat.setForceDark(webSettings, WebSettingsCompat.FORCE_DARK_ON);
+            }
         }
 
         super.onCreate(savedInstanceState);
