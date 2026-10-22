@@ -68,14 +68,10 @@ public class MainActivity extends AppCompatActivity {
         loadConfigFromAssets();
 
         // Primena tamnog režima u zavisnosti od konfiguracije
-        // 6. Najsavremeniji metod za automatsko tamno prebacivanje (Algorithmic Darkening)
         if (forceDark) {
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-                WebSettingsCompat.setAlgorithmicDarkeningAllowed(webSettings, true);
-            } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                @SuppressWarnings("deprecation")
-                WebSettingsCompat.setForceDark(webSettings, WebSettingsCompat.FORCE_DARK_ON);
-            }
+            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+                androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+            );
         }
 
         super.onCreate(savedInstanceState);
@@ -147,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
                 WebSettingsCompat.setForceDark(webSettings, WebSettingsCompat.FORCE_DARK_ON);
             }
         }
-
+        
         // Omogućavanje kolačića i kolačića treće strane
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
