@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean screenOn = false;
     private boolean allowZoom = false; 
     private boolean forceDark = false;
-    private boolean backgroundOpt = false; // Dodato za čitanje background opcije
+    private boolean backgroundOpt = false; 
 
     private WebView webView;
     private android.widget.FrameLayout rootLayout;
@@ -75,6 +75,12 @@ public class MainActivity extends AppCompatActivity {
         }
 
         super.onCreate(savedInstanceState);
+
+        // Omogućavamo crtanje sadržaja preko celog ekrana (iza status i navigation bar-ova)
+        getWindow().setFlags(
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        );
 
         // 2. Primena portrait podešavanja
         if (portrait) {
@@ -134,7 +140,6 @@ public class MainActivity extends AppCompatActivity {
                 WebSettingsCompat.setAlgorithmicDarkeningAllowed(webSettings, true);
             } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
                 @SuppressWarnings("deprecation")
-                boolean fallback = true;
                 WebSettingsCompat.setForceDark(webSettings, WebSettingsCompat.FORCE_DARK_ON);
             }
         }
@@ -216,7 +221,6 @@ public class MainActivity extends AppCompatActivity {
             }
 
             private boolean handleUrlLoading(WebView view, String url) {
-                // Provera da li je link eksterni na osnovu external liste iz appConfig.js
                 if (isExternalDomain(url)) {
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -303,7 +307,6 @@ public class MainActivity extends AppCompatActivity {
                     String cleanUrlStr = mainParts[0];
                     String fragment = mainParts[1];
 
-                    // Pronalaženje "ua" parametra iz fragmenta
                     String customUa = "";
                     if (fragment.contains("ua=")) {
                         try {
@@ -314,7 +317,6 @@ public class MainActivity extends AppCompatActivity {
                         } catch (Exception ignored) {}
                     }
 
-                    // Određivanje finalnog User-Agent-a
                     String finalUa;
                     if (!customUa.isEmpty() && customUa.length() < 300) {
                         finalUa = customUa;
@@ -459,8 +461,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // --- METODE ZA ČITANJE I PARSIRANJE appConfig.js FAJLA ---
-
     private void loadConfigFromAssets() {
         try {
             InputStream inputStream = getAssets().open("appConfig.js");
@@ -470,19 +470,16 @@ public class MainActivity extends AppCompatActivity {
             inputStream.close();
             String jsContent = new String(buffer, "UTF-8");
 
-            // Parsiramo vrednosti preko Regularnih Izraza (Regex)
             portrait = parseBoolean(jsContent, "portrait", true);
             screenOn = parseBoolean(jsContent, "screenOn", false);
             allowZoom = parseBoolean(jsContent, "allowZoom", false); 
             forceDark = parseBoolean(jsContent, "forceDark", false);
-            backgroundOpt = parseBoolean(jsContent, "background", false); // Čitamo background iz config-a
+            backgroundOpt = parseBoolean(jsContent, "background", false); 
             startURL = parseString(jsContent, "startURL", "");
             broAgent = parseString(jsContent, "broAgent", "");
             externalDomains = parseArray(jsContent, "external");
 
-        } catch (Exception e) {
-            // Ako fajl fali ili dođe do greške, ostaće podrazumevane vrednosti
-        }
+        } catch (Exception e) {}
     }
 
     private boolean parseBoolean(String content, String key, boolean defaultValue) {
@@ -529,7 +526,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Fizičko zaključavanje ili izlazak u pozadinu vraća aplikaciju u normalu
         if (backgroundManager != null) {
             backgroundManager.hideLockScreen();
         }
@@ -539,6 +535,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Osiguravamo da layout preko celog ekrana ostaje aktivan i pri vraćanju iz pozadine
+        getWindow().setFlags(
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        );
         if (webView != null) webView.onResume();
     }
 
