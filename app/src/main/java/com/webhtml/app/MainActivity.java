@@ -132,6 +132,10 @@ public class MainActivity extends AppCompatActivity {
         if (forceDark) {
             if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
                 WebSettingsCompat.setAlgorithmicDarkeningAllowed(webSettings, true);
+            } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                @SuppressWarnings("deprecation")
+                boolean fallback = true;
+                WebSettingsCompat.setForceDark(webSettings, WebSettingsCompat.FORCE_DARK_ON);
             }
         }
 
