@@ -45,15 +45,13 @@ public class Background {
         webSettings.setJavaScriptEnabled(true);
 
         lockScreenWebView.setVisibility(View.GONE);
-        lockScreenWebView.setAlpha(0f);
 
         String overlayHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>" +
                 "<meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'>" +
                 "<style>" +
                 "body { margin: 0; height: 100vh; background-color: #000000; font-family: Inter, Arial, sans-serif; color: #ffffff; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 40px 20px; box-sizing: border-box; user-select: none; overflow: hidden; }" +
-                ".content-container { opacity: 0; transition: opacity 0.3s ease-in-out; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; width: 100%; pointer-events: none; }" +
-                "body.lockscreen-active .content-container { opacity: 1; pointer-events: auto; }" +
-                // Pomerili smo top-section malo niže (margin-top: 50px) da sat bude oko 50px ispod katanca
+                ".content-container { display: none; opacity: 0; transition: opacity 0.3s ease-in-out; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; width: 100%; }" +
+                "body.lockscreen-active .content-container { display: flex; opacity: 1; }" +
                 ".top-section { display: flex; flex-direction: column; align-items: center; margin-top: 50px; gap: 20px; }" +
                 ".lock-icon { width: 24px; height: 24px; fill: #dadada; }" +
                 ".clock { font-size: 48px; font-weight: 300; letter-spacing: 1px; color: #f0f0f0; }" +
@@ -73,21 +71,21 @@ public class Background {
                 "<script>" +
                 "function updateClock() {" +
                 "  const now = new Date();" +
-                "  let h = String(now.getHours()).padStart(2, '0');" + // 24h format sa vodećom nulom (npr. 01, 02...)
-                "  let m = String(now.getMinutes()).padStart(2, '0');" + // Minuti sa vodećom nulom
+                "  let h = String(now.getHours()).padStart(2, '0');" +
+                "  let m = String(now.getMinutes()).padStart(2, '0');" +
                 "  document.getElementById('clock').innerText = h + ':' + m;" +
                 "}" +
                 "setInterval(updateClock, 1000);" +
                 "updateClock();" +
                 "window.setMode = function(isLock) {" +
-                "  if(isLock) { document.body.classList.add('lockscreen-active'); }" +
-                "  else { document.body.classList.remove('lockscreen-active'); }" +
+                "  const body = document.body;" +
+                "  if(isLock) { body.classList.add('lockscreen-active'); }" +
+                "  else { body.classList.remove('lockscreen-active'); }" +
                 "}" +
                 "</script></body></html>";
 
         lockScreenWebView.loadDataWithBaseURL(null, overlayHtml, "text/html", "UTF-8", null);
 
-        // Touch listener za gestove
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -135,12 +133,13 @@ public class Background {
         screenOffHandler.removeCallbacks(screenOffRunnable);
 
         if (lockScreenWebView != null) {
+            lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
             lockScreenWebView.setVisibility(View.VISIBLE);
             lockScreenWebView.setAlpha(1.0f);
             lockScreenWebView.setScaleX(1.0f);
             lockScreenWebView.setScaleY(1.0f);
-            lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
 
+            // Sakrivamo system barove čisto da pređu u fullscreen kada je ekran crn
             activity.getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 | View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -154,18 +153,18 @@ public class Background {
         isLockScreenVisible = true;
 
         if (lockScreenWebView != null) {
-            lockScreenWebView.setVisibility(View.VISIBLE);
-            lockScreenWebView.setAlpha(1.0f);
-            lockScreenWebView.setScaleX(1.0f);
-            lockScreenWebView.setScaleY(1.0f);
-            lockScreenWebView.evaluateJavascript("window.setMode(true);", null);
-            
             activity.getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 | View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             );
 
+            lockScreenWebView.setVisibility(View.VISIBLE);
+            lockScreenWebView.setAlpha(1.0f);
+            lockScreenWebView.setScaleX(1.0f);
+            lockScreenWebView.setScaleY(1.0f);
+            lockScreenWebView.evaluateJavascript("window.setMode(true);", null);
+            
             resetScreenOffTimer();
         }
     }
@@ -193,6 +192,7 @@ public class Background {
                 })
                 .start();
             
+            // Vraćamo system barove u normalan vidljiv položaj kad se otključa aplikacija
             activity.getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_VISIBLE
             );
