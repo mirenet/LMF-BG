@@ -47,7 +47,7 @@ public class Background {
 
         lockScreenWebView.setVisibility(View.GONE);
 
-        // HTML sa viewport-fit=cover da pokrije i prostor ispod barova
+        // HTML sa satom i One UI dizajnom
         String overlayHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>" +
                 "<meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'>" +
                 "<style>" +
@@ -88,6 +88,7 @@ public class Background {
 
         lockScreenWebView.loadDataWithBaseURL(null, overlayHtml, "text/html", "UTF-8", null);
 
+        // Touch listener za gestove (dvoklik i swipe-up)
         lockScreenWebView.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -135,10 +136,16 @@ public class Background {
         screenOffHandler.removeCallbacks(screenOffRunnable);
 
         if (lockScreenWebView != null) {
-            // Obojimo status i navigation bar u crno da se stapaju sa ekranom bez pomeranja
+            // Bojenje status i navigation bar-ova u crno i utapanje ikonica
             activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
             activity.getWindow().setStatusBarColor(Color.BLACK);
             activity.getWindow().setNavigationBarColor(Color.BLACK);
+            
+            View decorView = activity.getWindow().getDecorView();
+            int flags = decorView.getSystemUiVisibility();
+            flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            decorView.setSystemUiVisibility(flags);
 
             lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
             lockScreenWebView.setVisibility(View.VISIBLE);
@@ -153,10 +160,15 @@ public class Background {
         isLockScreenVisible = true;
 
         if (lockScreenWebView != null) {
-            // I ovde osiguravamo da su barovi crni
             activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
             activity.getWindow().setStatusBarColor(Color.BLACK);
             activity.getWindow().setNavigationBarColor(Color.BLACK);
+
+            View decorView = activity.getWindow().getDecorView();
+            int flags = decorView.getSystemUiVisibility();
+            flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            decorView.setSystemUiVisibility(flags);
 
             lockScreenWebView.setVisibility(View.VISIBLE);
             lockScreenWebView.setAlpha(1.0f);
@@ -175,6 +187,7 @@ public class Background {
             lockScreenWebView.setPivotX(lockScreenWebView.getWidth() / 2f);
             lockScreenWebView.setPivotY(lockScreenWebView.getHeight() / 2f);
 
+            // One UI animacija pri otključavanju (fade-out + zoom-in)
             lockScreenWebView.animate()
                 .alpha(0f)
                 .scaleX(1.08f)
@@ -189,7 +202,7 @@ public class Background {
                     isScreenBlack = false;
                     isLockScreenVisible = false;
                     
-                    // Vratimo originalnu boju barova (npr. crnu ili tamno sivu koju aplikacija koristi, npr #070707)
+                    // Vraćamo originalnu boju barova aplikacije
                     activity.getWindow().setStatusBarColor(Color.parseColor("#070707"));
                     activity.getWindow().setNavigationBarColor(Color.parseColor("#070707"));
                 })
@@ -199,6 +212,6 @@ public class Background {
 
     private void resetScreenOffTimer() {
         screenOffHandler.removeCallbacks(screenOffRunnable);
-        screenOffHandler.postDelayed(screenOffRunnable, 5000);
+        screenOffHandler.postDelayed(screenOffRunnable, 5000); // 5 sekundi
     }
 }
