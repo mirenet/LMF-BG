@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
@@ -46,6 +47,7 @@ public class Background {
 
         lockScreenWebView.setVisibility(View.GONE);
 
+        // HTML sa viewport-fit=cover da pokrije i prostor ispod barova
         String overlayHtml = "<!DOCTYPE html><html><head><meta charset='UTF-8'>" +
                 "<meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'>" +
                 "<style>" +
@@ -133,18 +135,16 @@ public class Background {
         screenOffHandler.removeCallbacks(screenOffRunnable);
 
         if (lockScreenWebView != null) {
+            // Obojimo status i navigation bar u crno da se stapaju sa ekranom bez pomeranja
+            activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            activity.getWindow().setStatusBarColor(Color.BLACK);
+            activity.getWindow().setNavigationBarColor(Color.BLACK);
+
             lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
             lockScreenWebView.setVisibility(View.VISIBLE);
             lockScreenWebView.setAlpha(1.0f);
             lockScreenWebView.setScaleX(1.0f);
             lockScreenWebView.setScaleY(1.0f);
-
-            // Sakrivamo system barove čisto da pređu u fullscreen kada je ekran crn
-            activity.getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                | View.SYSTEM_UI_FLAG_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-            );
         }
     }
 
@@ -153,11 +153,10 @@ public class Background {
         isLockScreenVisible = true;
 
         if (lockScreenWebView != null) {
-            activity.getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                | View.SYSTEM_UI_FLAG_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-            );
+            // I ovde osiguravamo da su barovi crni
+            activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+            activity.getWindow().setStatusBarColor(Color.BLACK);
+            activity.getWindow().setNavigationBarColor(Color.BLACK);
 
             lockScreenWebView.setVisibility(View.VISIBLE);
             lockScreenWebView.setAlpha(1.0f);
@@ -189,13 +188,12 @@ public class Background {
                     lockScreenWebView.evaluateJavascript("window.setMode(false);", null);
                     isScreenBlack = false;
                     isLockScreenVisible = false;
+                    
+                    // Vratimo originalnu boju barova (npr. crnu ili tamno sivu koju aplikacija koristi, npr #070707)
+                    activity.getWindow().setStatusBarColor(Color.parseColor("#070707"));
+                    activity.getWindow().setNavigationBarColor(Color.parseColor("#070707"));
                 })
                 .start();
-            
-            // Vraćamo system barove u normalan vidljiv položaj kad se otključa aplikacija
-            activity.getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_VISIBLE
-            );
         }
     }
 
