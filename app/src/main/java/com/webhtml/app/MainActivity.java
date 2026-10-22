@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean screenOn = false;
     private boolean allowZoom = false; 
     private boolean forceDark = false;
-    private boolean backgroundOpt = false; // Dodato za čitanje background opcije
+    private boolean backgroundOpt = false; 
 
     private WebView webView;
     private android.widget.FrameLayout rootLayout;
@@ -116,14 +116,14 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setSupportMultipleWindows(false);
         webSettings.setJavaScriptCanOpenWindowsAutomatically(true);
 
-        // 4. Primena allowZoom podešavanja (Standardni zoom sa dva prsta)
+        // 4. Primena allowZoom podešavanja
         webSettings.setSupportZoom(allowZoom);
         webSettings.setBuiltInZoomControls(allowZoom);
         webSettings.setDisplayZoomControls(false);
         webSettings.setLoadWithOverviewMode(true);
         webSettings.setUseWideViewPort(true);
 
-        // 5. Primena broAgent podešavanja (ako nije prazan)
+        // 5. Primena broAgent podešavanja
         if (broAgent != null && !broAgent.trim().isEmpty()) {
             webSettings.setUserAgentString(broAgent);
         }
@@ -134,7 +134,6 @@ public class MainActivity extends AppCompatActivity {
                 WebSettingsCompat.setAlgorithmicDarkeningAllowed(webSettings, true);
             } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
                 @SuppressWarnings("deprecation")
-                boolean fallback = true;
                 WebSettingsCompat.setForceDark(webSettings, WebSettingsCompat.FORCE_DARK_ON);
             }
         }
@@ -206,8 +205,7 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String url = request.getUrl().toString();
-                return handleUrlLoading(view, url);
+                return handleUrlLoading(view, request.getUrl().toString());
             }
 
             @Override
@@ -216,7 +214,6 @@ public class MainActivity extends AppCompatActivity {
             }
 
             private boolean handleUrlLoading(WebView view, String url) {
-                // Provera da li je link eksterni na osnovu external liste iz appConfig.js
                 if (isExternalDomain(url)) {
                     try {
                         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -303,7 +300,6 @@ public class MainActivity extends AppCompatActivity {
                     String cleanUrlStr = mainParts[0];
                     String fragment = mainParts[1];
 
-                    // Pronalaženje "ua" parametra iz fragmenta
                     String customUa = "";
                     if (fragment.contains("ua=")) {
                         try {
@@ -314,7 +310,6 @@ public class MainActivity extends AppCompatActivity {
                         } catch (Exception ignored) {}
                     }
 
-                    // Određivanje finalnog User-Agent-a
                     String finalUa;
                     if (!customUa.isEmpty() && customUa.length() < 300) {
                         finalUa = customUa;
@@ -322,44 +317,20 @@ public class MainActivity extends AppCompatActivity {
                         finalUa = (!broAgent.isEmpty()) ? broAgent : webView.getSettings().getUserAgentString();
                     }
 
-                    String lowerUa = finalUa.toLowerCase();
-                    boolean isHtmlMode = lowerUa.contains("mozilla");
-
                     URL url = new URL(cleanUrlStr);
                     HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                     connection.setRequestMethod("GET");
                     connection.setRequestProperty("User-Agent", finalUa);
-                    
-                    if (isHtmlMode) {
-                        connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
-                        connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
-                        connection.setRequestProperty("Upgrade-Insecure-Requests", "1");
-                        connection.setRequestProperty("Sec-Fetch-Site", "none");
-                        connection.setRequestProperty("Sec-Fetch-Mode", "navigate");
-                        connection.setRequestProperty("Sec-Fetch-User", "?1");
-                        connection.setRequestProperty("Sec-Fetch-Dest", "document");
-                    } else {
-                        connection.setRequestProperty("Accept", "application/json, application/ld+json, text/plain, */*");
-                    }
-                    
                     connection.setConnectTimeout(10000);
                     connection.setReadTimeout(10000);
 
                     InputStream inputStream = connection.getInputStream();
                     String mimeType = connection.getContentType();
                     if (mimeType == null) {
-                        mimeType = isHtmlMode ? "text/html; charset=UTF-8" : "application/json; charset=UTF-8";
+                        mimeType = "text/html; charset=UTF-8";
                     }
                     
-                    String encoding = "UTF-8";
-                    if (mimeType.contains("charset=")) {
-                        try {
-                            encoding = mimeType.split("charset=")[1].split(";")[0].trim();
-                        } catch (Exception ignored) {}
-                    }
-
-                    return new WebResourceResponse(mimeType.split(";")[0].trim(), encoding, inputStream);
-
+                    return new WebResourceResponse(mimeType.split(";")[0].trim(), "UTF-8", inputStream);
                 } catch (Exception e) {}
                 
                 return super.shouldInterceptRequest(view, request);
@@ -459,8 +430,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // --- METODE ZA ČITANJE I PARSIRANJE appConfig.js FAJLA ---
-
     private void loadConfigFromAssets() {
         try {
             InputStream inputStream = getAssets().open("appConfig.js");
@@ -470,19 +439,15 @@ public class MainActivity extends AppCompatActivity {
             inputStream.close();
             String jsContent = new String(buffer, "UTF-8");
 
-            // Parsiramo vrednosti preko Regularnih Izraza (Regex)
             portrait = parseBoolean(jsContent, "portrait", true);
             screenOn = parseBoolean(jsContent, "screenOn", false);
             allowZoom = parseBoolean(jsContent, "allowZoom", false); 
             forceDark = parseBoolean(jsContent, "forceDark", false);
-            backgroundOpt = parseBoolean(jsContent, "background", false); // Čitamo background iz config-a
+            backgroundOpt = parseBoolean(jsContent, "background", false); 
             startURL = parseString(jsContent, "startURL", "");
             broAgent = parseString(jsContent, "broAgent", "");
             externalDomains = parseArray(jsContent, "external");
-
-        } catch (Exception e) {
-            // Ako fajl fali ili dođe do greške, ostaće podrazumevane vrednosti
-        }
+        } catch (Exception e) {}
     }
 
     private boolean parseBoolean(String content, String key, boolean defaultValue) {
@@ -529,7 +494,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Fizičko zaključavanje ili izlazak u pozadinu vraća aplikaciju u normalu
         if (backgroundManager != null) {
             backgroundManager.hideLockScreen();
         }
